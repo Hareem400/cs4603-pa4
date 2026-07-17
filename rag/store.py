@@ -22,7 +22,12 @@ def get_vector_store():
             "(Task 0.3) before the retriever can be built."
         )
 
-    workspace_client = WorkspaceClient(host=s["host"], token=s["token"])
+    # Explicit workspace_client so credentials (host + PAT) are always passed
+    # through, instead of relying on notebook auto-detection (which fails
+    # outside a Databricks notebook, e.g. in CI or the serving container).
+    workspace_client = WorkspaceClient(
+        host=s["host"], token=s["token"], auth_type="pat"
+    )
 
     return DatabricksVectorSearch(
         endpoint=s["vs_endpoint"],
