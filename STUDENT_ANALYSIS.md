@@ -92,7 +92,7 @@ If the rag_agent in step 1 returns "not found in documents", the original plan's
 1. Why does `models-from-code` require a self-contained file? What breaks if you reference external state (e.g., a database running only on your laptop)?
    - I will mur
 2. Your model calls a managed Vector Search index at inference time rather than embedding documents into the container image. What are the tradeoffs (freshness, cold-start size, latency, failure modes) of querying an external index vs. baking the corpus into the model artifact?
-   - TODO
+   - mamaaa
 
 ### Task 2.3 — Serving Endpoint
 1. Why must you pass `DATABRICKS_TOKEN` as an environment variable to the endpoint, even though it's already authenticated to serve models?
