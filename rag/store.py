@@ -12,7 +12,6 @@ CITATION_COLUMNS = ["chunk_id", "source", "page"]
 @lru_cache(maxsize=1)
 def get_vector_store():
     """Return a DatabricksVectorSearch handle over the configured index."""
-    from databricks.sdk import WorkspaceClient
     from databricks_langchain import DatabricksVectorSearch
 
     s = get_settings()
@@ -22,18 +21,14 @@ def get_vector_store():
             "(Task 0.3) before the retriever can be built."
         )
 
-    # Explicit workspace_client so credentials (host + PAT) are always passed
-    # through, instead of relying on notebook auto-detection (which fails
-    # outside a Databricks notebook, e.g. in CI or the serving container).
-    workspace_client = WorkspaceClient(
-        host=s["host"], token=s["token"], auth_type="pat"
-    )
-
     return DatabricksVectorSearch(
-        endpoint=s["vs_endpoint"],
         index_name=s["vs_index"],
         columns=CITATION_COLUMNS,
-        workspace_client=workspace_client,
+        client_args={
+            "workspace_url": s["host"],
+            "personal_access_token": s["token"],
+            "disable_notice": True,
+        },
     )
 
 
