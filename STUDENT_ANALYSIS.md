@@ -90,7 +90,7 @@ If the rag_agent in step 1 returns "not found in documents", the original plan's
 
 ### Task 2.1 — Model Definition
 1. Why does `models-from-code` require a self-contained file? What breaks if you reference external state (e.g., a database running only on your laptop)?
-   - TODO
+   - I will mur
 2. Your model calls a managed Vector Search index at inference time rather than embedding documents into the container image. What are the tradeoffs (freshness, cold-start size, latency, failure modes) of querying an external index vs. baking the corpus into the model artifact?
    - TODO
 
