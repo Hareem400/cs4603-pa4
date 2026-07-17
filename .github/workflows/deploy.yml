@@ -50,6 +50,16 @@ jobs:
       - name: Sync dependencies
         run: uv sync --extra dev
 
+      - name: Debug credentials (safe, no secrets exposed)
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          echo "HOST length: ${#DATABRICKS_HOST}"
+          echo "HOST starts/ends: ${DATABRICKS_HOST:0:10}...${DATABRICKS_HOST: -5}"
+          echo "TOKEN length: ${#DATABRICKS_TOKEN}"
+          echo "TOKEN starts/ends: ${DATABRICKS_TOKEN:0:6}...${DATABRICKS_TOKEN: -4}"
+
       - name: Deploy
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
