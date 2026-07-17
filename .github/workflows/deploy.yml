@@ -61,4 +61,5 @@ jobs:
           VECTOR_SEARCH_ENDPOINT: ${{ vars.VECTOR_SEARCH_ENDPOINT }}
           VECTOR_SEARCH_INDEX: ${{ vars.VECTOR_SEARCH_INDEX }}
           EMBEDDINGS_ENDPOINT: ${{ vars.EMBEDDINGS_ENDPOINT || 'databricks-gte-large-en' }}
+          DATABRICKS_MODEL: ${{ vars.DATABRICKS_MODEL || 'databricks-meta-llama-3-3-70b-instruct' }}
         run: uv run python deployment/deploy.py
