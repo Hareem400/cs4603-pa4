@@ -32,7 +32,8 @@ def log_and_register() -> tuple[str, str]:
     uc_schema = _require("UC_SCHEMA")
     model_name = _require("SERVING_ENDPOINT_NAME").replace("-", "_")
     uc_name = f"{uc_catalog}.{uc_schema}.{model_name}"
-
+    
+    mlflow.set_tracking_uri("databricks")
     mlflow.set_registry_uri("databricks-uc")
     mlflow.set_experiment(f"/Users/{_current_user()}/pa4-document-analyst")
 

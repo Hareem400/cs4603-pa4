@@ -68,7 +68,35 @@ def _run_async(coro):
 
 
 def load_mcp_tools(server_path: str | None = None):
-    """Connect to the GIVEN MCP server over stdio and return its LangChain tools."""
+    """Connect to the MCP server and return its LangChain tools.
+
+    Two modes, chosen by whether $MCP_SERVER_URL is set:
+      - SET (Bonus C): connect over streamable-http to the standalone
+        Databricks App hosting tools/mcp_server.py, with a bearer token.
+      - UNSET (Part 1 default): spawn tools/mcp_server.py as a local stdio
+        subprocess, exactly as before.
+    """
+    import os
+
+    mcp_url = os.environ.get("MCP_SERVER_URL")
+
+    if mcp_url:
+        from databricks.sdk import WorkspaceClient
+        from langchain_mcp_adapters.client import MultiServerMCPClient
+
+        wc = WorkspaceClient()
+        auth_headers = wc.config.authenticate()
+        client = MultiServerMCPClient(
+            {
+                "analyst": {
+                    "url": f"{mcp_url.rstrip('/')}/mcp",
+                    "transport": "streamable_http",
+                    "headers": auth_headers,
+                }
+            }
+        )
+        return _run_async(client.get_tools())
+
     server_path = server_path or _DEFAULT_SERVER_PATH
 
     with _use_real_os_streams():

@@ -90,23 +90,37 @@ If the rag_agent in step 1 returns "not found in documents", the original plan's
 
 ### Task 2.1 — Model Definition
 1. Why does `models-from-code` require a self-contained file? What breaks if you reference external state (e.g., a database running only on your laptop)?
-   - I will mur
+
+MLflow re-executes this file inside the serving container, on a different machine than the one that logged it. That container can't see your laptop's filesystem, network, or local processes: only what's explicitly packaged via `code_paths` or passed as env vars/secrets. Reference a local DB or file path and the container tries to reach its own localhost or a path that was never copied over, and fails at startup. The underlying goal is reproducibility: any registered version should behave identically regardless of who loads it or when.
+
 2. Your model calls a managed Vector Search index at inference time rather than embedding documents into the container image. What are the tradeoffs (freshness, cold-start size, latency, failure modes) of querying an external index vs. baking the corpus into the model artifact?
-   - mamaaa
+   - **Freshness:** live index means re-syncing the source data updates every deployed version automatically, no redeploy needed. Baked-in corpus is frozen at log time.
+   - **Cold-start size:** current setup ships only code, so containers start fast. Baking in a corpus means shipping potentially gigabytes inside the artifact, slowing upload and cold starts.
+   - **Latency:** flips the other way — baked-in is a local lookup (fast); external index adds a network round-trip per query.
+   - **Failure modes:** external index is one more thing that can fail independently of the container itself (index down/scaling → `rag_agent` fails even though the model's healthy). Baked-in has fewer moving parts but pays for it everywhere else above.
 
 ### Task 2.3 — Serving Endpoint
 1. Why must you pass `DATABRICKS_TOKEN` as an environment variable to the endpoint, even though it's already authenticated to serve models?
-   - TODO
+
+- Two separate auth relationships: Databricks authenticates *inbound* calls to the endpoint; your model's own code needs credentials for its *outbound* calls (chat LLM, Vector Search, MCP subprocess). Nothing about being "a Databricks model" auto-authenticates those internal calls — `config.get_chat_llm()` and `rag/store.get_retriever()` explicitly build clients from `DATABRICKS_HOST`/`DATABRICKS_TOKEN`, so without passing it in, those calls have no credentials.
+
+
 2. What happens to in-flight requests when you deploy a new model version to the same endpoint? How does Databricks handle the transition?
-   - TODO
+ 
+ Databricks spins up new containers on the new version alongside the old, waits for them to become healthy, then shifts traffic and tears down the old ones: standard rolling deployment. That's why `update_config_and_wait` blocks until `NOT_UPDATING`. Requests already in flight keep being served by whatever container they landed on; nothing gets killed mid-response. It's also why a failed update is relatively safe: the endpoint stays on the last good version instead of going down entirely.
+
+
 
 ### Task 3.2 — Client
 1. Why is exponential backoff better than fixed-interval retries for a model serving endpoint?
-   - TODO
+ A 429/503 usually means momentary load, not permanent failure. Fixed-interval retries keep hitting the endpoint at the same rate while it's trying to recover or scale up, which can make things worse. Exponential backoff (1s, 2s, 4s...) gives it increasing room to recover before the next attempt: kinder to a stressed system and more likely to succeed.
+
 2. Your client has a `max_retries` parameter. What is the danger of setting it too high in a production system with many concurrent users?
-   - TODO
+ Retry storms: if the endpoint is genuinely overloaded, many concurrent clients all retrying aggressively multiplies total request volume right when the endpoint can least handle it: turning a struggling system into a full outage. It also means individual users wait much longer before getting a clear failure, when a fast honest error would be better UX.
+
 3. When would you choose `ask_streaming()` over `ask()`? Give a concrete UX example.
-   - TODO
+   - Whenever the response takes long enough that a blank screen feels broken. Example: a user asks "Summarize FY2023 revenue trends and calculate the 3-year CAGR" — the full planner → supervisor → RAG/MCP → synthesizer pipeline can take several seconds. `ask()` shows a static spinner the whole time; `ask_streaming()` shows text appearing as it's produced, feeling far more responsive for the same total wall-clock time.
+   - Caveat worth noting: since `synthesizer` currently writes the full answer in one shot (not token-by-token), `ask_streaming()`'s fallback-to-`ask()` path is what actually fires today — true incremental streaming would need the synthesizer's LLM call itself to stream.
 
 ### Bonus A — CI/CD (if attempted)
 1. Why should the deploy step only run on `main` and not on feature branches?
