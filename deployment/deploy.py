@@ -38,8 +38,8 @@ def log_and_register() -> tuple[str, str]:
     mlflow.set_experiment(f"/Users/{_current_user()}/pa4-document-analyst")
 
     with mlflow.start_run():
-        model_info = mlflow.langchain.log_model(
-            lc_model=_AGENT_MODEL_PATH,
+        model_info = mlflow.pyfunc.log_model(
+            python_model=_AGENT_MODEL_PATH,
             name="agent",
             code_paths=[
                 str(_ROOT / "agent"), str(_ROOT / "rag"),
