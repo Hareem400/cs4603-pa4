@@ -141,7 +141,7 @@ MLflow re-executes this file inside the serving container, on a different machin
 
 1. Compare the `agents.deploy()` approach with the manual MLflow + CLI approach from Part 2. What control do you gain or lose with each?
    - `agents.deploy()` collapses building `EndpointCoreConfigInput`, calling `WorkspaceClient.serving_endpoints.create_and_wait()`, and wiring secrets/env vars into one call, and auto-provisions a Review App: no `SECRET_SCOPE` to manage by hand.
-   - What you lose: control over the output shape. Part 2's manual endpoint serves whatever `graph.invoke()` returns, including our full custom `AnalystState`. `agents.deploy()` enforces a strict contract (`ChatCompletionResponse`/`StringResponse`/legacy messages pattern) and rejects anything else: we hit this directly, the raw graph failed validation and needed an explicit `ModelSignature` to fix.
+   - What you lose: control over the output shape. Part 2's manual endpoint serves whatever `graph.invoke()` returns, including our full custom `AnalystState`.  `agents.deploy()` enforces a strict contract (`ChatCompletionResponse`/`StringResponse`/legacy messages pattern) and rejects anything else: we hit this directly, the raw graph failed validation and needed an explicit `ModelSignature` to fix.
    - Bottom line: Part 2 fits a custom agent state and full control over serving. `agents.deploy()` fits when you want the Review App and don't mind shaping output to its expected contract.
 
 2. The Review App enables human feedback collection. How would you use this feedback to improve the agent over time? Describe a concrete feedback loop.
