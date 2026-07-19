@@ -1,0 +1,3 @@
+command: ["python", "deployment/mcp_app/app.py"]
+runtime: "python"
+description: "MCP tools app for CS4603 PA4 (Bonus C)"

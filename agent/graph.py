@@ -73,19 +73,37 @@ def load_mcp_tools(server_path: str | None = None):
     Two modes, chosen by whether $MCP_SERVER_URL is set:
       - SET (Bonus C): connect over streamable-http to the standalone
         Databricks App hosting tools/mcp_server.py, with a bearer token.
+        Auth preference: service-principal M2M OAuth (DATABRICKS_CLIENT_ID +
+        DATABRICKS_CLIENT_SECRET, used by CI and the deployed model) falling
+        back to a local interactive OAuth CLI profile named "mcp" (used for
+        local notebook testing via `databricks auth login --profile mcp`).
       - UNSET (Part 1 default): spawn tools/mcp_server.py as a local stdio
         subprocess, exactly as before.
     """
-    import os
-
     mcp_url = os.environ.get("MCP_SERVER_URL")
 
     if mcp_url:
         from databricks.sdk import WorkspaceClient
         from langchain_mcp_adapters.client import MultiServerMCPClient
 
-        wc = WorkspaceClient()
+        client_id = os.environ.get("DATABRICKS_CLIENT_ID")
+        client_secret = os.environ.get("DATABRICKS_CLIENT_SECRET")
+
+        if client_id and client_secret:
+            # CI / deployed model: service-principal M2M OAuth.
+            wc = WorkspaceClient(
+                host=os.environ["DATABRICKS_HOST"],
+                client_id=client_id,
+                client_secret=client_secret,
+                auth_type="oauth-m2m",
+            )
+        else:
+            # Local dev: interactive OAuth CLI profile.
+            # Set up once with: databricks auth login --host <workspace-url> --profile mcp
+            wc = WorkspaceClient(profile="mcp")
+
         auth_headers = wc.config.authenticate()
+
         client = MultiServerMCPClient(
             {
                 "analyst": {
@@ -139,10 +157,35 @@ def make_mcp_node(tools, llm):
         if tool is None:
             tool_output = f"Unknown tool '{call['name']}' requested."
         else:
-            try:
-                tool_output = tool.invoke(call["args"])
-            except Exception as exc:  # noqa: BLE001
-                tool_output = f"Error calling tool '{call['name']}': {exc}"
+                try:
+                    import inspect
+
+                    # Prefer async entrypoints if available
+                    if hasattr(tool, "ainvoke"):
+                        tool_output = _run_async(tool.ainvoke(call["args"]))
+                    elif hasattr(tool, "arun"):
+                        tool_output = _run_async(tool.arun(**call.get("args", {})))
+                    else:
+                        maybe_result = tool.invoke(call["args"])
+                        if inspect.isawaitable(maybe_result):
+                            tool_output = _run_async(maybe_result)
+                        else:
+                            tool_output = maybe_result
+                except Exception as exc:  # noqa: BLE001
+                    # If sync invoke failed because the tool only supports async, try async variants
+                    msg = str(exc)
+                    if "does not support sync invocation" in msg or "StructuredTool" in msg:
+                        try:
+                            if hasattr(tool, "ainvoke"):
+                                tool_output = _run_async(tool.ainvoke(call["args"]))
+                            elif hasattr(tool, "arun"):
+                                tool_output = _run_async(tool.arun(**call.get("args", {})))
+                            else:
+                                raise
+                        except Exception as exc2:  # noqa: BLE001
+                            tool_output = f"Error calling tool '{call['name']}': {exc2}"
+                    else:
+                        tool_output = f"Error calling tool '{call['name']}': {exc}"
 
         result = f"Step {idx + 1} ('{step}'): {tool_output}"
         return {"step_results": [result], "current_step_index": idx + 1}

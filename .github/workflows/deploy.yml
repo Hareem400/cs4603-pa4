@@ -64,6 +64,8 @@ jobs:
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
           UC_CATALOG: ${{ vars.UC_CATALOG || 'main' }}
           UC_SCHEMA: ${{ vars.UC_SCHEMA || 'default' }}
           SERVING_ENDPOINT_NAME: ${{ vars.SERVING_ENDPOINT_NAME || 'pa4-document-analyst' }}
@@ -72,4 +74,5 @@ jobs:
           VECTOR_SEARCH_INDEX: ${{ vars.VECTOR_SEARCH_INDEX }}
           EMBEDDINGS_ENDPOINT: ${{ vars.EMBEDDINGS_ENDPOINT || 'databricks-gte-large-en' }}
           DATABRICKS_MODEL: ${{ vars.DATABRICKS_MODEL || 'databricks-meta-llama-3-3-70b-instruct' }}
+          MCP_SERVER_URL: ${{ vars.MCP_SERVER_URL || 'https://cs4603-mcp-tools-7474644904229912.aws.databricksapps.com'}}
         run: uv run python deployment/deploy.py
