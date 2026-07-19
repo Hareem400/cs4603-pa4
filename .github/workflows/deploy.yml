@@ -1,11 +1,10 @@
 # Bonus A — CI/CD pipeline (.github/workflows/deploy.yml)
 #
-# TODO: Implement a lint -> test -> deploy workflow.
+# lint -> test -> deploy:
 #   - lint:   ruff check on agent/ and client/
-#   - test:   a smoke test that imports and compiles the graph
-#   - deploy: ONLY on push to main; log the model, register a new UC version,
-#             and update the serving endpoint. Use GitHub Secrets for
-#             DATABRICKS_HOST / DATABRICKS_TOKEN. Add a workflow_dispatch trigger.
+#   - test:   offline smoke test (imports + compiles the graph, mocked LLM)
+#   - deploy: ONLY on push to main; logs the model, registers a new UC version,
+#             and updates the serving endpoint.
 
 name: deploy
 
@@ -50,22 +49,11 @@ jobs:
       - name: Sync dependencies
         run: uv sync --extra dev
 
-      - name: Debug credentials (safe, no secrets exposed)
-        env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-        run: |
-          echo "HOST length: ${#DATABRICKS_HOST}"
-          echo "HOST starts/ends: ${DATABRICKS_HOST:0:10}...${DATABRICKS_HOST: -5}"
-          echo "TOKEN length: ${#DATABRICKS_TOKEN}"
-          echo "TOKEN starts/ends: ${DATABRICKS_TOKEN:0:6}...${DATABRICKS_TOKEN: -4}"
-
       - name: Deploy
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
-          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+          DATABRICKS_MODEL: ${{ vars.DATABRICKS_MODEL || 'databricks-meta-llama-3-3-70b-instruct' }}
           UC_CATALOG: ${{ vars.UC_CATALOG || 'main' }}
           UC_SCHEMA: ${{ vars.UC_SCHEMA || 'default' }}
           SERVING_ENDPOINT_NAME: ${{ vars.SERVING_ENDPOINT_NAME || 'pa4-document-analyst' }}
@@ -73,6 +61,4 @@ jobs:
           VECTOR_SEARCH_ENDPOINT: ${{ vars.VECTOR_SEARCH_ENDPOINT }}
           VECTOR_SEARCH_INDEX: ${{ vars.VECTOR_SEARCH_INDEX }}
           EMBEDDINGS_ENDPOINT: ${{ vars.EMBEDDINGS_ENDPOINT || 'databricks-gte-large-en' }}
-          DATABRICKS_MODEL: ${{ vars.DATABRICKS_MODEL || 'databricks-meta-llama-3-3-70b-instruct' }}
-          MCP_SERVER_URL: ${{ vars.MCP_SERVER_URL || 'https://cs4603-mcp-tools-7474644904229912.aws.databricksapps.com'}}
         run: uv run python deployment/deploy.py

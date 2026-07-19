@@ -21,6 +21,10 @@ def get_vector_store():
             "(Task 0.3) before the retriever can be built."
         )
 
+    # Pass host/token directly as client_args instead of via workspace_client=,
+    # which routes through the SDK's auth_type auto-detection. That resolution
+    # path was rejecting valid credentials in CI even though the identical
+    # host+token pair works fine against the raw REST API.
     return DatabricksVectorSearch(
         index_name=s["vs_index"],
         columns=CITATION_COLUMNS,

@@ -32,22 +32,12 @@ def log_and_register() -> tuple[str, str]:
     uc_schema = _require("UC_SCHEMA")
     model_name = _require("SERVING_ENDPOINT_NAME").replace("-", "_")
     uc_name = f"{uc_catalog}.{uc_schema}.{model_name}"
-    
+
     mlflow.set_tracking_uri("databricks")
     mlflow.set_registry_uri("databricks-uc")
     mlflow.set_experiment(f"/Users/{_current_user()}/pa4-document-analyst")
 
     with mlflow.start_run():
-        from mlflow.models.signature import ModelSignature
-        from mlflow.types.schema import Schema, ColSpec
-
-        # Provide a minimal model signature so Unity Catalog accepts the model.
-        # Input: JSON field `messages` (string); Output: `response` (string).
-        signature = ModelSignature(
-            inputs=Schema([ColSpec("string", "messages")]),
-            outputs=Schema([ColSpec("string", "response")]),
-        )
-
         model_info = mlflow.langchain.log_model(
             lc_model=_AGENT_MODEL_PATH,
             name="agent",
@@ -56,7 +46,7 @@ def log_and_register() -> tuple[str, str]:
                 str(_ROOT / "tools"), str(_ROOT / "config.py"),
             ],
             pip_requirements=_PIP_REQUIREMENTS,
-            signature=signature,
+            input_example={"messages": [{"role": "user", "content": "What was the revenue?"}]},
         )
 
     registered = mlflow.register_model(model_info.model_uri, uc_name)
@@ -66,7 +56,11 @@ def log_and_register() -> tuple[str, str]:
 
 def _current_user() -> str:
     try:
-        w = WorkspaceClient()
+        w = WorkspaceClient(
+            host=os.environ.get("DATABRICKS_HOST"),
+            token=os.environ.get("DATABRICKS_TOKEN"),
+            auth_type="pat",
+        )
         return w.current_user.me().user_name
     except Exception:
         return os.environ.get("DATABRICKS_HOST", "unknown-user")
@@ -76,25 +70,11 @@ def create_or_update_endpoint(uc_name: str, version: str) -> str:
     endpoint_name = _require("SERVING_ENDPOINT_NAME")
     secret_scope = _require("SECRET_SCOPE")
 
-    w = WorkspaceClient()
-
-    # Build environment variables and include optional MCP app config if present
-    env_vars = {
-        "DATABRICKS_HOST": f"{{{{secrets/{secret_scope}/DATABRICKS_HOST}}}}",
-        "DATABRICKS_TOKEN": f"{{{{secrets/{secret_scope}/DATABRICKS_TOKEN}}}}",
-        "DATABRICKS_MODEL": f"{{{{secrets/{secret_scope}/DATABRICKS_MODEL}}}}",
-        "VECTOR_SEARCH_ENDPOINT": _require("VECTOR_SEARCH_ENDPOINT"),
-        "VECTOR_SEARCH_INDEX": _require("VECTOR_SEARCH_INDEX"),
-        "EMBEDDINGS_ENDPOINT": os.environ.get("EMBEDDINGS_ENDPOINT", "databricks-gte-large-en"),
-    }
-
-    mcp_url = os.environ.get("MCP_SERVER_URL")
-    if mcp_url:
-        env_vars["MCP_SERVER_URL"] = mcp_url
-        # Optional: name of the Databricks App (used when minting app tokens)
-        mcp_app_name = os.environ.get("MCP_APP_NAME")
-        if mcp_app_name:
-            env_vars["MCP_APP_NAME"] = mcp_app_name
+    w = WorkspaceClient(
+        host=os.environ.get("DATABRICKS_HOST"),
+        token=os.environ.get("DATABRICKS_TOKEN"),
+        auth_type="pat",
+    )
 
     config = EndpointCoreConfigInput(
         name=endpoint_name,
@@ -104,7 +84,18 @@ def create_or_update_endpoint(uc_name: str, version: str) -> str:
                 entity_version=version,
                 workload_size="Small",
                 scale_to_zero_enabled=True,
-                environment_vars=env_vars,
+                environment_vars={
+                    "DATABRICKS_HOST": f"{{{{secrets/{secret_scope}/DATABRICKS_HOST}}}}",
+                    "DATABRICKS_TOKEN": f"{{{{secrets/{secret_scope}/DATABRICKS_TOKEN}}}}",
+                    "DATABRICKS_MODEL": f"{{{{secrets/{secret_scope}/DATABRICKS_MODEL}}}}",
+                    "VECTOR_SEARCH_ENDPOINT": _require("VECTOR_SEARCH_ENDPOINT"),
+                    "VECTOR_SEARCH_INDEX": _require("VECTOR_SEARCH_INDEX"),
+                    "EMBEDDINGS_ENDPOINT": os.environ.get("EMBEDDINGS_ENDPOINT", "databricks-gte-large-en"),
+                    # Bonus C: remote MCP tool server + service-principal M2M auth
+                    "MCP_SERVER_URL": os.environ.get("MCP_SERVER_URL", ""),
+                    "DATABRICKS_CLIENT_ID": f"{{{{secrets/{secret_scope}/DATABRICKS_CLIENT_ID}}}}",
+                    "DATABRICKS_CLIENT_SECRET": f"{{{{secrets/{secret_scope}/DATABRICKS_CLIENT_SECRET}}}}",
+                },
             )
         ]
     )
@@ -135,5 +126,4 @@ if __name__ == "__main__":
 
     name, ver = log_and_register()
     create_or_update_endpoint(name, ver)
-
 

@@ -18,6 +18,8 @@ load_dotenv()
 
 def _require(name: str) -> str:
     val = os.environ.get(name)
+    if val is not None:
+        val = val.strip()
     if not val:
         raise OSError(
             f"Missing required environment variable: {name}. "
